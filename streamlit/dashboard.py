@@ -381,7 +381,7 @@ def display_overview_page(user_dataframes, selected_user_id):
     display_monthly_trend(kpis['monthly_trend'])
 
 def display_merchant_analysis_page(user_dataframes, selected_user_id):
-    """Display merchant analysis page"""
+    """Display merchant analysis page - FIXED boolean condition"""
     st.title("🏪 Merchant Intelligence Dashboard")
     st.markdown("*Advanced merchant analysis with pattern recognition and loyalty insights*")
     st.markdown("---")
@@ -406,16 +406,13 @@ def display_merchant_analysis_page(user_dataframes, selected_user_id):
         index=1
     )
     
-    
-
-
-
     selected_period = time_period_options[selected_period_display]
     
     # Get merchant insights
     merchant_insights = merchant_analyzer.get_merchant_insights(selected_user_id, selected_period)
     
-    if not merchant_insights or not merchant_insights.get('merchant_stats') is not None:
+    # FIXED: Proper boolean check for merchant data
+    if not merchant_insights or merchant_insights.get('merchant_stats') is None or len(merchant_insights.get('merchant_stats', pd.DataFrame())) == 0:
         st.warning("No merchant data available for analysis.")
         return
     
@@ -443,7 +440,7 @@ def display_merchant_analysis_page(user_dataframes, selected_user_id):
     tab1, tab2, tab3 = st.tabs(["📊 Top Merchants", "🔄 Subscriptions", "🎯 Loyalty Opportunities"])
     
     with tab1:
-        if not merchant_stats.empty:
+        if len(merchant_stats) > 0:  # FIXED: Use len() check
             # Top merchants visualization
             top_merchants = merchant_stats.head(10)
             
@@ -466,10 +463,8 @@ def display_merchant_analysis_page(user_dataframes, selected_user_id):
             )
     
     with tab2:
-        
-        
         subscriptions = merchant_insights.get('subscription_merchants', pd.DataFrame())
-        if subscriptions.get('insufficient_data', False):
+        if isinstance(subscriptions, dict) and subscriptions.get('insufficient_data', False):
             st.subheader("🔄 Subscription Analysis")
             
             # Display the warning message
@@ -487,8 +482,7 @@ def display_merchant_analysis_page(user_dataframes, selected_user_id):
             - Recommended: Use 3+ months for accurate detection
             """)
         else:
-            
-            if not subscriptions.empty:
+            if len(subscriptions) > 0:  # FIXED: Use len() check
                 st.subheader("🔄 Detected Subscription Services")
                 
                 total_monthly = subscriptions['estimated_monthly_cost'].sum()
@@ -502,7 +496,7 @@ def display_merchant_analysis_page(user_dataframes, selected_user_id):
     with tab3:
         loyalty_ops = merchant_insights.get('loyalty_opportunities', pd.DataFrame())
         
-        if not loyalty_ops.empty:
+        if len(loyalty_ops) > 0:  # FIXED: Use len() check
             st.subheader("🎯 Top Loyalty Opportunities")
             
             for _, merchant in loyalty_ops.head(5).iterrows():
@@ -519,102 +513,140 @@ def display_merchant_analysis_page(user_dataframes, selected_user_id):
             st.info("No specific loyalty opportunities identified.")
 
 def display_optimization_overview(optimization):
-    """Display optimization overview with key metrics + complete rewards analysis"""
-    st.subheader("🎯 Portfolio Optimization Overview")
+    """FIXED: Enhanced optimization overview with proper pandas handling"""
+    st.subheader("🎯 Portfolio Optimization Results")
     
-    results = optimization['optimization_results']
-    optimal_portfolio = optimization['optimal_portfolio']
+    results = optimization.get('optimization_results', {})
+    optimal_portfolio = optimization.get('optimal_portfolio', {})
     
-    # Key metrics in prominent cards
+    # ==== MAIN METRICS SECTION ====
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         improvement = results.get('annual_improvement', 0)
+        improvement_pct = results.get('improvement_percentage', 0)
+        
+        # Dynamic color based on improvement
+        if improvement > 100:
+            delta_color = "normal"
+            emoji = "🎉"
+        elif improvement > 50:
+            delta_color = "normal" 
+            emoji = "💡"
+        else:
+            delta_color = "off"
+            emoji = "⚖️"
+        
         st.metric(
-            "💰 Annual Improvement",
+            f"{emoji} Annual Improvement",
             f"${improvement:.2f}",
-            delta=f"{results.get('improvement_percentage', 0):.1f}% increase",
-            delta_color="normal"
+            delta=f"{improvement_pct:.1f}% boost",
+            delta_color=delta_color
         )
     
     with col2:
         signup_bonuses = results.get('signup_bonuses', 0)
         st.metric(
-            "🎁 Signup Bonuses",
+            "🎁 Welcome Bonuses",
             f"${signup_bonuses:.2f}",
-            delta="One-time bonus",
-            delta_color="normal"
+            delta="One-time earnings",
+            help="Total signup bonuses from recommended cards"
         )
     
     with col3:
-        first_year_benefit = results.get('first_year_benefit', 0)
-        st.metric(
-            "🚀 First Year Benefit",
-            f"${first_year_benefit:.2f}",
-            delta="Including bonuses",
-            delta_color="normal"
-        )
-    
-    with col4:
         payback_period = results.get('payback_period', 0)
         if payback_period > 0:
-            payback_text = f"{payback_period:.1f} years"
-            payback_delta = "Fee payback period"
+            payback_months = int(payback_period * 12)
+            payback_text = f"{payback_months} months"
+            payback_delta = "to break even"
+            payback_color = "normal" if payback_months <= 12 else "inverse"
         else:
             payback_text = "Immediate"
-            payback_delta = "No annual fees"
+            payback_delta = "No fees to recover"
+            payback_color = "normal"
         
         st.metric(
             "⏱️ Payback Period",
             payback_text,
-            delta=payback_delta
+            delta=payback_delta,
+            delta_color=payback_color
         )
     
-    # Optimization summary
+    with col4:
+        # Portfolio efficiency score
+        if optimal_portfolio:
+            total_fees = optimal_portfolio.get('total_annual_fees', 0)
+            if total_fees > 0:
+                efficiency = (improvement / total_fees) * 100 if total_fees > 0 else 0
+                st.metric(
+                    "🎯 Efficiency Score",
+                    f"{efficiency:.0f}%",
+                    delta="ROI on annual fees"
+                )
+            else:
+                st.metric(
+                    "🎯 Portfolio Score",
+                    "A+",
+                    delta="No annual fees"
+                )
+                
+    
+
+     # ==== DYNAMIC RECOMMENDATION CALLOUT ====
     st.markdown("---")
     
     if improvement > 100:
-        st.success(f"🎉 **Excellent Optimization Opportunity!** You could earn ${improvement:.2f} more per year by optimizing your card portfolio.")
+        st.success(f"🎉 **Excellent Opportunity!** Optimizing could earn you **${improvement:.0f} more per year** — that's like getting a {improvement/12:.0f}% monthly bonus on your spending!")
     elif improvement > 50:
-        st.info(f"💡 **Good Optimization Potential** - ${improvement:.2f} additional annual rewards possible.")
+        st.info(f"💡 **Good Potential** — ${improvement:.0f} additional annual rewards possible with the right card strategy.")
     elif improvement > 0:
-        st.warning(f"⚖️ **Modest Improvement Available** - ${improvement:.2f} more per year, consider if worth the effort.")
+        st.warning(f"⚖️ **Minor Gains Available** — ${improvement:.0f} yearly improvement. Consider if the effort is worth it.")
     else:
-        st.success("✅ **Your current portfolio is already well-optimized!**")
+        st.success("✅ **Already Optimized!** Your current strategy is working well.")
     
-    # Quick insights
+    # ==== PORTFOLIO INSIGHT CARDS ====
     if optimal_portfolio:
-        st.subheader("🔍 Quick Insights")
+        col1, col2 = st.columns(2)
         
-        total_fees = optimal_portfolio.get('total_annual_fees', 0)
-        if total_fees > 0:
-            st.info(f"💳 **Annual Fees**: ${total_fees:.2f} total across recommended cards")
-        else:
-            st.success("🆓 **No Annual Fees** in recommended portfolio")
+        with col1:
+            total_fees = optimal_portfolio.get('total_annual_fees', 0)
+            recommended_cards = len(optimal_portfolio.get('cards', []))
+            
+            if total_fees > 0:
+                st.info(f"💳 **{recommended_cards}-Card Strategy** with ${total_fees:.0f} total annual fees")
+            else:
+                st.success(f"🆓 **{recommended_cards}-Card Strategy** with zero annual fees")
         
-        recommended_cards = len(optimal_portfolio.get('cards', []))
-        st.info(f"🃏 **Portfolio Size**: {recommended_cards} cards recommended for optimal rewards")
+        with col2:
+            # Best category insight
+            spending_analysis = optimization.get('spending_analysis', {})
+            if spending_analysis and spending_analysis.get('annual_spending_by_category'):
+                top_category = max(spending_analysis['annual_spending_by_category'].items(), key=lambda x: x[1])
+                st.info(f"🏆 **Top Category**: {top_category[0]} (${top_category[1]:,.0f}/year)")
 
-    # ==== NEW SECTION: Complete Rewards Analysis ====
+    # ==== COMPLETE REWARDS ANALYSIS SECTION ====
     st.markdown("---")
-    st.subheader("📊 Complete Rewards Analysis")
-    st.markdown("*Detailed breakdown of current vs potential rewards by spending category*")
+    st.subheader("📊 Category-by-Category Rewards Analysis")
     
-    # Get spending analysis data
+    # Add storytelling intro
     spending_analysis = optimization.get('spending_analysis', {})
     if not spending_analysis or not spending_analysis.get('annual_spending_by_category'):
-        st.warning("⚠️ No detailed spending analysis available for rewards breakdown.")
+        st.warning("⚠️ No detailed spending breakdown available for category analysis.")
         return
     
-    # Initialize rewards optimizer to get detailed analysis
-    from enhanced_rewards_optimizer import RewardsOptimizer
-    rewards_optimizer = RewardsOptimizer(pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+    # Brief analysis summary first
+    total_categories = len(spending_analysis['annual_spending_by_category'])
+    total_spending = spending_analysis.get('total_annual_spending', 0)
+    
+    st.markdown(f"""
+    📈 **Analysis Summary**: Analyzing **{total_categories} spending categories** across **${total_spending:,.0f}** in annual spending.
+    The optimization below shows where you can earn the most additional rewards.
+    """)
     
     # Calculate detailed rewards by category
     spending_by_category = spending_analysis['annual_spending_by_category']
-    current_annual_rewards = optimization.get('current_annual_rewards', 0)
     
-    # Create detailed analysis similar to spending_analyzer
+    # Create detailed analysis
     detailed_rewards_analysis = []
     
     for category, spending in spending_by_category.items():
@@ -651,133 +683,177 @@ def display_optimization_overview(optimization):
     
     if not rewards_df.empty:
         # Overview metrics for rewards analysis
-        col1, col2, col3 = st.columns(3)
-        
         total_current = rewards_df['current_rewards'].sum()
         total_potential = rewards_df['potential_rewards'].sum()
         total_additional = rewards_df['additional_rewards'].sum()
         
+        # Show only the most important metric to avoid redundancy
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
             st.metric(
-                "Current Rewards Earned",
-                f"${total_current:.2f}",
-                "For analyzed period"
+                "🎯 Optimization Potential",
+                f"${total_additional:.2f}",
+                f"+{(total_additional/total_current*100):.0f}% vs current" if total_current > 0 else "N/A"
             )
         
         with col2:
-            st.metric(
-                "Potential Additional Rewards", 
-                f"${total_additional:.2f}",
-                f"{(total_additional/total_current*100):.1f}% increase" if total_current > 0 else "N/A"
-            )
+            # Show best opportunity - FIXED: Check if dataframe has data before accessing
+            if len(rewards_df) > 0:
+                best_opportunity = rewards_df.iloc[0]
+                if best_opportunity['additional_rewards'] > 0:
+                    category_name = best_opportunity['category']
+                    display_name = category_name[:20] + "..." if len(category_name) > 20 else category_name
+                    st.metric(
+                        "🏆 Best Category",
+                        display_name,
+                        f"+${best_opportunity['additional_rewards']:.2f}/year"
+                    )
         
         with col3:
-            st.metric(
-                "Optimized Total Rewards",
-                f"${total_potential:.2f}",
-                f"vs ${total_current:.2f} current"
-            )
+            # Show recommended strategy
+            if optimal_portfolio and optimal_portfolio.get('card_details'):
+                primary_card = optimal_portfolio['card_details'][0]['name']
+                display_name = primary_card[:20] + "..." if len(primary_card) > 20 else primary_card
+                st.metric(
+                    "💳 Primary Recommendation", 
+                    display_name,
+                    "Best overall value"
+                )
         
-        # Visualization section
-        col1, col2 = st.columns([1, 1])
+        # Interactive visualizations
+        col1, col2 = st.columns([3, 2])
         
         with col1:
-            # Current vs Potential comparison chart
-            comparison_data = rewards_df.head(8).copy()  # Top 8 categories
+            # Enhanced comparison chart with annotations
+            top_categories = rewards_df.head(8).copy()
             
             fig_comparison = go.Figure()
             
+            # Current rewards
             fig_comparison.add_trace(go.Bar(
                 name='Current Rewards',
-                x=comparison_data['category'],
-                y=comparison_data['current_rewards'],
-                marker_color='lightblue'
+                x=top_categories['category'],
+                y=top_categories['current_rewards'],
+                marker_color='lightblue',
+                text=top_categories['current_rewards'].round(2),
+                texttemplate='$%{text}',
+                textposition='inside'
             ))
             
+            # Potential rewards
             fig_comparison.add_trace(go.Bar(
-                name='Potential Rewards',
-                x=comparison_data['category'],
-                y=comparison_data['potential_rewards'],
-                marker_color='darkgreen'
+                name='Optimized Rewards',
+                x=top_categories['category'],
+                y=top_categories['potential_rewards'],
+                marker_color='darkgreen',
+                text=top_categories['potential_rewards'].round(2),
+                texttemplate='$%{text}',
+                textposition='inside'
             ))
+            
+            # Add annotations for biggest opportunities - FIXED: Check if data exists
+            if len(top_categories) > 0:
+                biggest_opportunity = top_categories.iloc[0]
+                fig_comparison.add_annotation(
+                    x=biggest_opportunity['category'],
+                    y=biggest_opportunity['potential_rewards'],
+                    text=f"↗️ Best opportunity: +${biggest_opportunity['additional_rewards']:.0f}",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor="red",
+                    bgcolor="yellow",
+                    bordercolor="red"
+                )
             
             fig_comparison.update_layout(
-                title="Current vs Potential Rewards by Category",
-                xaxis_title="Category",
-                yaxis_title="Rewards ($)",
+                title="Current vs Optimized Rewards by Category",
+                xaxis_title="Spending Category",
+                yaxis_title="Annual Rewards ($)",
                 barmode='group',
                 height=400,
-                xaxis_tickangle=-45
+                xaxis_tickangle=-45,
+                showlegend=True
             )
             
             st.plotly_chart(fig_comparison, use_container_width=True)
         
         with col2:
-            # Top opportunities chart
-            top_opportunities = rewards_df.head(6)
-            fig_rewards = px.bar(
-                top_opportunities,
-                x='additional_rewards',
-                y='category',
-                orientation='h',
-                title="Top Rewards Optimization Opportunities",
+            # Opportunity matrix - spending vs potential gain
+            fig_matrix = px.scatter(
+                rewards_df.head(10),
+                x='spending',
+                y='additional_rewards',
+                size='improvement_pct',
+                hover_name='category',
+                title="Opportunity Matrix",
+                labels={
+                    'spending': 'Annual Spending ($)',
+                    'additional_rewards': 'Additional Rewards ($)',
+                    'improvement_pct': 'Improvement %'
+                },
                 color='additional_rewards',
-                color_continuous_scale='greens',
-                text='additional_rewards'
+                color_continuous_scale='viridis'
             )
-            fig_rewards.update_traces(
-                texttemplate='$%{text:.2f}',
-                textposition='inside'
-            )
-            fig_rewards.update_layout(
-                yaxis={'categoryorder': 'total ascending'},
-                showlegend=False,
-                height=400
-            )
-            st.plotly_chart(fig_rewards, use_container_width=True)
+            
+            # Add quadrant lines - FIXED: Use scalar values instead of Series
+            avg_spending = float(rewards_df['spending'].median())
+            avg_additional = float(rewards_df['additional_rewards'].median())
+            
+            fig_matrix.add_hline(y=avg_additional, line_dash="dash", line_color="gray", annotation_text="Avg Opportunity")
+            fig_matrix.add_vline(x=avg_spending, line_dash="dash", line_color="gray", annotation_text="Avg Spending")
+            
+            fig_matrix.update_layout(height=400)
+            st.plotly_chart(fig_matrix, use_container_width=True)
         
-        # Actionable insights
-        st.subheader("🎯 Key Rewards Insights")
+        # Smart insights section - only show actionable ones - FIXED: Use proper boolean indexing
+        significant_opportunities = rewards_df[rewards_df['additional_rewards'] > 5.0]
         
-        # Filter significant opportunities
-        significant_opportunities = rewards_df[rewards_df['additional_rewards'] > 1.0]
-        
-        if not significant_opportunities.empty:
-            # Show top 3 opportunities in a concise format
-            st.markdown("**🏆 Top Opportunities:**")
+        if len(significant_opportunities) > 0:  # FIXED: Use len() instead of direct boolean
+            st.subheader("🎯 Your Top 3 Action Items")
             
             for i, (_, opportunity) in enumerate(significant_opportunities.head(3).iterrows(), 1):
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.markdown(f"**#{i}. {opportunity['category']}**")
-                    st.caption(f"${opportunity['spending']:,.0f} spending")
-                
-                with col2:
-                    st.metric("Additional Rewards", f"${opportunity['additional_rewards']:.2f}")
-                
-                with col3:
-                    st.metric("Best Card", opportunity['best_card'])
-                
-                with col4:
-                    st.metric("Rate", f"{opportunity['best_reward_rate']:.1f}%")
+                with st.container():
+                    # Create action-oriented cards
+                    col1, col2, col3 = st.columns([2, 1, 1])
+                    
+                    with col1:
+                        st.markdown(f"**{i}. Switch {opportunity['category']} spending to {opportunity['best_card']}**")
+                        st.caption(f"Current: 1% → Optimized: {opportunity['best_reward_rate']:.1f}% rewards")
+                    
+                    with col2:
+                        st.metric("💰 Extra Earnings", f"${opportunity['additional_rewards']:.0f}/year")
+                    
+                    with col3:
+                        # Calculate monthly impact
+                        monthly_impact = opportunity['additional_rewards'] / 12
+                        st.metric("📅 Monthly Impact", f"${monthly_impact:.0f}")
+                    
+                    if i < 3:  # Don't add separator after last item
+                        st.markdown("---")
         else:
-            st.success("✅ You're already optimizing your rewards well across all categories!")
+            st.success("✅ **Great Job!** You're already maximizing rewards across all major categories.")
         
-        # Detailed rewards table (collapsible)
-        with st.expander("📋 View Complete Rewards Analysis Table"):
+        # Collapsible detailed table
+        with st.expander("📋 View Complete Category Analysis", expanded=False):
+            # Enhanced table with better formatting
+            display_df = rewards_df.copy()
+            display_df['category_short'] = display_df['category'].apply(lambda x: x[:25] + "..." if len(x) > 25 else x)
+            display_df['best_card_short'] = display_df['best_card'].apply(lambda x: x[:20] + "..." if len(x) > 20 else x)
+            
             st.dataframe(
-                rewards_df[['category', 'spending', 'current_rewards', 'potential_rewards', 'additional_rewards', 'best_card', 'best_reward_rate']],
+                display_df[['category_short', 'spending', 'current_rewards', 'potential_rewards', 'additional_rewards', 'best_card_short', 'best_reward_rate']],
                 column_config={
-                    "category": "Category",
-                    "spending": st.column_config.NumberColumn("Spending", format="$%.2f"),
+                    "category_short": "Category",
+                    "spending": st.column_config.NumberColumn("Annual Spending", format="$%,.0f"),
                     "current_rewards": st.column_config.NumberColumn("Current Rewards", format="$%.2f"),
-                    "potential_rewards": st.column_config.NumberColumn("Potential Rewards", format="$%.2f"),
+                    "potential_rewards": st.column_config.NumberColumn("Optimized Rewards", format="$%.2f"),
                     "additional_rewards": st.column_config.NumberColumn("Additional Rewards", format="$%.2f"),
-                    "best_card": "Recommended Card",
-                    "best_reward_rate": st.column_config.NumberColumn("Best Rate", format="%.1f%%")
+                    "best_card_short": "Best Card",
+                    "best_reward_rate": st.column_config.NumberColumn("Reward Rate", format="%.1f%%")
                 },
-                use_container_width=True
+                use_container_width=True,
+                hide_index=True
             )
             
             # Export functionality
@@ -786,42 +862,40 @@ def display_optimization_overview(optimization):
             with col1:
                 csv_rewards = rewards_df.to_csv(index=False)
                 st.download_button(
-                    label="💰 Download Complete Rewards Analysis",
+                    label="💾 Download Full Analysis",
                     data=csv_rewards,
-                    file_name=f"complete_rewards_analysis.csv",
+                    file_name=f"rewards_optimization_analysis.csv",
                     mime="text/csv"
                 )
             
             with col2:
-                # Create summary report
-                summary_data = {
-                    'Metric': [
-                        'Current Total Rewards',
-                        'Potential Total Rewards', 
-                        'Additional Rewards Possible',
-                        'Percentage Improvement',
-                        'Best Opportunity Category',
-                        'Best Opportunity Value'
-                    ],
-                    'Value': [
-                        f"${total_current:.2f}",
-                        f"${total_potential:.2f}",
-                        f"${total_additional:.2f}",
-                        f"{(total_additional/total_current*100):.1f}%" if total_current > 0 else "N/A",
-                        rewards_df.iloc[0]['category'] if len(rewards_df) > 0 else "N/A",
-                        f"${rewards_df.iloc[0]['additional_rewards']:.2f}" if len(rewards_df) > 0 else "N/A"
-                    ]
-                }
-                summary_df = pd.DataFrame(summary_data)
-                csv_summary = summary_df.to_csv(index=False)
-                st.download_button(
-                    label="📈 Download Summary Report",
-                    data=csv_summary,
-                    file_name=f"rewards_optimization_summary.csv",
-                    mime="text/csv"
-                )
+                # Create action plan export - FIXED: Check if significant_opportunities exists
+                if len(significant_opportunities) > 0:
+                    action_plan = []
+                    for i, (_, opp) in enumerate(significant_opportunities.head(3).iterrows(), 1):
+                        action_plan.append({
+                            'Priority': i,
+                            'Action': f"Use {opp['best_card']} for {opp['category']}",
+                            'Current_Rate': '1%',
+                            'New_Rate': f"{opp['best_reward_rate']:.1f}%",
+                            'Annual_Gain': f"${opp['additional_rewards']:.2f}"
+                        })
+                    
+                    if action_plan:
+                        action_df = pd.DataFrame(action_plan)
+                        csv_actions = action_df.to_csv(index=False)
+                        st.download_button(
+                            label="📋 Download Action Plan",
+                            data=csv_actions,
+                            file_name=f"rewards_action_plan.csv",
+                            mime="text/csv"
+                        )
     else:
-        st.warning("⚠️ No rewards analysis available. This might be due to limited spending data or category information.")
+        st.warning("⚠️ Unable to generate category analysis due to insufficient spending data.")
+    
+    # Quick tip at the bottom
+    st.markdown("---")
+    st.info("💡 **Pro Tip**: Focus on your top 2-3 spending categories first. Small changes in high-spending areas often yield the biggest rewards boost!")
 def display_current_vs_optimal(optimization, rewards_optimizer):
     """Display detailed current vs optimal comparison"""
     st.subheader("📊 Current Portfolio vs Optimal Portfolio")
@@ -947,84 +1021,256 @@ def display_current_vs_optimal(optimization, rewards_optimizer):
             st.plotly_chart(fig, use_container_width=True)
 
 def display_card_comparison_table(optimization, rewards_optimizer):
-    """Display comprehensive card comparison table"""
-    st.subheader("💰 Complete Card Comparison for Your Spending")
+    """Enhanced card comparison with better context and storytelling"""
+    st.subheader("💰 Credit Card Performance for Your Spending")
     
     spending_analysis = optimization.get('spending_analysis')
+    optimal_portfolio = optimization.get('optimal_portfolio')
     
     if not spending_analysis:
         st.warning("Unable to generate card comparison due to insufficient spending data.")
         return
     
+    # Add context about why cards are ranked this way
+    total_spending = spending_analysis.get('total_annual_spending', 0)
+    st.markdown(f"""
+    📊 **Analysis Context**: Rankings based on your **${total_spending:,.0f}** annual spending pattern. 
+    Single cards are ranked by *total net value*, while the *optimal portfolio* considers *category coverage*.
+    """)
+    
     # Generate comparison table
     comparison_table = rewards_optimizer.generate_card_comparison_table(spending_analysis)
     
     if not comparison_table.empty:
-        # Add ranking
+        # Add ranking and context columns
         comparison_table['Rank'] = range(1, len(comparison_table) + 1)
         
-        # Reorder columns
-        columns_order = ['Rank', 'Card', 'Net Rewards', 'Gross Rewards', 'Annual Fee', 'Signup Bonus', 'First Year Value']
-        comparison_table = comparison_table[columns_order]
+        # Add a "Best For" column based on card strengths
+        comparison_table['Best_For'] = comparison_table['Card'].map({
+            'Chase Freedom Unlimited': 'General spending + Restaurants',
+            'Chase Sapphire Preferred': 'Travel + Dining',
+            'American Express Gold': 'Heavy restaurant/grocery spending',
+            'Citi Double Cash': 'Everything (2% flat rate)',
+            'Capital One Savor': 'Dining + Entertainment',
+            'Discover it Cash Back': 'Rotating categories + First year'
+        })
         
-        # Style the dataframe
+        # Reorder and format columns
+        display_columns = ['Rank', 'Card', 'Net Rewards', 'Best_For', 'Annual Fee', 'Signup Bonus', 'First Year Value']
+        comparison_table = comparison_table[display_columns]
+        
+        # Color-code the dataframe for better UX
         st.dataframe(
             comparison_table,
             column_config={
-                "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-                "Card": "Card Name",
-                "Annual Fee": st.column_config.NumberColumn("Annual Fee", format="$%d"),
-                "Gross Rewards": st.column_config.NumberColumn("Gross Rewards", format="$%.2f"),
-                "Net Rewards": st.column_config.NumberColumn("Net Rewards", format="$%.2f"),
-                "Signup Bonus": st.column_config.NumberColumn("Signup Bonus", format="$%d"),
-                "First Year Value": st.column_config.NumberColumn("First Year Value", format="$%.2f")
+                "Rank": st.column_config.NumberColumn("📈 Rank", format="%d", width="small"),
+                "Card": st.column_config.TextColumn("💳 Card Name", width="medium"),
+                "Net Rewards": st.column_config.NumberColumn("💰 Net Annual Value", format="$%.0f", width="medium"),
+                "Best_For": st.column_config.TextColumn("🎯 Best For", width="large"),
+                "Annual Fee": st.column_config.NumberColumn("💳 Annual Fee", format="$%d", width="small"),
+                "Signup Bonus": st.column_config.NumberColumn("🎁 Welcome Bonus", format="$%d", width="medium"),
+                "First Year Value": st.column_config.NumberColumn("🚀 First Year Total", format="$%.0f", width="medium")
             },
             use_container_width=True,
             hide_index=True
         )
         
-        # Top 3 recommendations highlight
-        st.subheader("🏆 Top 3 Recommendations")
+        # Add explanation of portfolio vs single card rankings
+        st.info("""
+        🤔 **Why does the optimal portfolio differ from this ranking?** 
+        - **This table** ranks single cards by total value
+        - **The optimal portfolio** combines cards for maximum category coverage
+        - A lower-ranked card might be perfect for specific spending categories
+        """)
+        
+        # Enhanced top 3 recommendations with context
+        st.subheader("🏆 Top Recommendations Explained")
         
         top_3 = comparison_table.head(3)
         
         for idx, (_, card) in enumerate(top_3.iterrows(), 1):
             medal = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉"
             
-            with st.expander(f"{medal} **#{idx}: {card['Card']}** - ${card['Net Rewards']:.2f} annual value"):
+            # Determine recommendation reason
+            if card['Annual Fee'] == 0 and card['Net Rewards'] > 1000:
+                reason = "🆓 High value with no annual fee"
+            elif card['Annual Fee'] > 0 and card['Net Rewards'] > 1500:
+                reason = "💪 High rewards justify the annual fee"
+            elif 'Double Cash' in card['Card']:
+                reason = "🎯 Simple 2% on everything"
+            else:
+                reason = "⚡ Strong overall performance"
+            
+            with st.expander(f"{medal} **#{idx}: {card['Card']}** - {reason}"):
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    st.metric("Net Annual Rewards", f"${card['Net Rewards']:.2f}")
+                    st.metric("Annual Value", f"${card['Net Rewards']:.0f}")
                     if card['Annual Fee'] > 0:
-                        st.caption(f"After ${card['Annual Fee']} annual fee")
+                        payback_months = (card['Annual Fee'] / (card['Net Rewards'] + card['Annual Fee'])) * 12
+                        st.caption(f"Fee pays back in ~{payback_months:.0f} months")
                     else:
-                        st.caption("No annual fee")
+                        st.caption("✅ No annual fee")
                 
                 with col2:
-                    st.metric("Signup Bonus", f"${card['Signup Bonus']:.0f}")
-                    st.caption("One-time bonus")
+                    st.metric("Welcome Bonus", f"${card['Signup Bonus']:.0f}")
+                    st.caption("One-time earning")
                 
                 with col3:
-                    st.metric("First Year Value", f"${card['First Year Value']:.2f}")
-                    st.caption("Including signup bonus")
+                    st.metric("First Year Total", f"${card['First Year Value']:.0f}")
+                    roi = ((card['First Year Value'] - card['Annual Fee']) / card['Annual Fee'] * 100) if card['Annual Fee'] > 0 else 0
+                    if roi > 0:
+                        st.caption(f"ROI: {roi:.0f}%")
+                    else:
+                        st.caption("Immediate value")
                 
-                # Show why this card is good for the user
-                card_name = card['Card']
-                if card_name in rewards_optimizer.card_rewards_database:
-                    card_info = rewards_optimizer.card_rewards_database[card_name]
-                    best_categories = []
+                # Show specific strengths
+                st.markdown(f"**🎯 Best Use Case**: {card['Best_For']}")
+                
+                # Add specific category rates if this card is in optimal portfolio
+                if optimal_portfolio and card['Card'] in [detail['name'] for detail in optimal_portfolio.get('card_details', [])]:
+                    st.success("⭐ **This card is in your optimal portfolio!**")
                     
-                    for category, rate in card_info['categories'].items():
-                        if category != 'default' and rate >= 0.03:  # 3% or higher
-                            best_categories.append(f"**{category}**: {rate*100:.0f}% rewards")
+                    # Show why it's recommended
+                    card_detail = next((detail for detail in optimal_portfolio['card_details'] if detail['name'] == card['Card']), None)
+                    if card_detail:
+                        best_categories = []
+                        for category, rate in card_detail['categories'].items():
+                            if category != 'default' and rate >= 0.03:  # 3% or higher
+                                best_categories.append(f"**{category}**: {rate*100:.0f}% rewards")
+                        
+                        if best_categories:
+                            st.markdown("**🎯 Your High-Reward Categories:**")
+                            for cat in best_categories[:3]:  # Show top 3
+                                st.markdown(f"• {cat}")
+        
+        # Portfolio strategy explanation
+        st.markdown("---")
+        st.subheader("🧠 Portfolio Strategy Insights")
+        
+        if optimal_portfolio:
+            recommended_cards = [detail['name'] for detail in optimal_portfolio.get('card_details', [])]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**🎯 Your Optimal Portfolio:**")
+                for i, card_name in enumerate(recommended_cards, 1):
+                    # Find the rank of this card in the table
+                    card_rank = comparison_table[comparison_table['Card'] == card_name]['Rank'].iloc[0] if not comparison_table[comparison_table['Card'] == card_name].empty else "N/A"
+                    st.markdown(f"{i}. **{card_name}** (Ranked #{card_rank} overall)")
+            
+            with col2:
+                st.markdown("**💡 Why This Combination?**")
+                
+                # Calculate coverage
+                spending_by_category = spending_analysis.get('annual_spending_by_category', {})
+                if spending_by_category:
+                    total_coverage = 0
+                    covered_spending = 0
                     
-                    if best_categories:
-                        st.markdown("**🎯 Best Rewards Categories:**")
-                        for cat in best_categories[:3]:  # Show top 3
-                            st.markdown(f"• {cat}")
+                    for category, spending in spending_by_category.items():
+                        total_coverage += spending
+                        best_rate = 0.01  # Default
+                        
+                        for card_detail in optimal_portfolio.get('card_details', []):
+                            rate = card_detail['categories'].get(category, card_detail['categories']['default'])
+                            best_rate = max(best_rate, rate)
+                        
+                        if best_rate > 0.015:  # Better than 1.5%
+                            covered_spending += spending
+                    
+                    coverage_pct = (covered_spending / total_coverage * 100) if total_coverage > 0 else 0
+                    
+                    st.markdown(f"""
+                    - **{coverage_pct:.0f}%** of your spending gets enhanced rewards
+                    - **Category optimization** beats single-card approach
+                    - **Balanced** fee vs. no-fee strategy
+                    """)
+        
+        # Action-oriented summary
+        st.markdown("---")
+        best_single_card = comparison_table.iloc[0]['Card']
+        best_portfolio_value = optimal_portfolio.get('net_annual_rewards', 0) if optimal_portfolio else 0
+        best_single_value = comparison_table.iloc[0]['Net Rewards']
+        
+        if best_portfolio_value > best_single_value:
+            portfolio_advantage = best_portfolio_value - best_single_value
+            st.success(f"""
+            🎯 **Bottom Line**: While **{best_single_card}** is the best single card (${best_single_value:.0f} value), 
+            your **optimal portfolio strategy** earns **${portfolio_advantage:.0f} more** (${best_portfolio_value:.0f} total) 
+            through smart category coverage!
+            """)
+        else:
+            st.info(f"""
+            🎯 **Bottom Line**: **{best_single_card}** performs so well for your spending pattern 
+            that a single-card strategy might be your simplest approach.
+            """)
+    
     else:
         st.error("Unable to generate card comparison table.")
+
+# Also add this helper function for the impact analysis to fix payback period consistency
+def display_impact_analysis_improved(optimization):
+    """Enhanced impact analysis with consistent formatting"""
+    st.subheader("📈 Financial Impact Analysis")
+    
+    results = optimization.get('optimization_results', {})
+    optimal_portfolio = optimization.get('optimal_portfolio')
+    
+    if not results:
+        st.warning("No optimization results to analyze.")
+        return
+    
+    # Impact metrics with consistent formatting
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 💸 Financial Impact")
+        
+        annual_improvement = results.get('annual_improvement', 0)
+        monthly_improvement = annual_improvement / 12
+        
+        st.metric("Monthly Boost", f"${monthly_improvement:.2f}")
+        st.metric("Annual Boost", f"${annual_improvement:.2f}")
+        
+        # ROI calculation with consistent display
+        if optimal_portfolio:
+            total_fees = optimal_portfolio.get('total_annual_fees', 0)
+            if total_fees > 0:
+                roi = (annual_improvement / total_fees) * 100
+                st.metric("Return on Investment", f"{roi:.0f}%", help="Annual improvement ÷ annual fees")
+            else:
+                st.success("♾️ Infinite ROI - No annual fees!")
+    
+    with col2:
+        st.markdown("#### ⏰ Timeline Analysis")
+        
+        # FIXED: Consistent payback period formatting
+        payback_period = results.get('payback_period', 0)
+        if payback_period > 0:
+            payback_months = int(payback_period * 12)  # Consistent rounding
+            st.metric("Fee Payback Period", f"{payback_months} months")
+            
+            if payback_months <= 6:
+                st.success("✅ Quick payback - fees recover fast!")
+            elif payback_months <= 12:
+                st.info("👍 Reasonable payback timeline")
+            else:
+                st.warning("⚠️ Long payback - consider carefully")
+        else:
+            st.success("✅ Immediate benefits - no fees to recover")
+        
+        # Show break-even spending
+        break_even = results.get('break_even_spending', {})
+        if break_even:
+            st.markdown("**💰 Break-even Spending:**")
+            for card, spending in list(break_even.items())[:2]:  # Show max 2
+                card_short = card.split()[0] + "..." if len(card) > 15 else card
+                st.caption(f"• {card_short}: ${spending:,.0f}/year")
+    
+    # Rest of the function remains the same...
+    # [Include the 5-year projection visualization her
 
 def display_impact_analysis(optimization):
     """Display detailed impact analysis"""
